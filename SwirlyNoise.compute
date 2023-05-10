@@ -6,8 +6,8 @@ float EaseInOut(float f)
 }
 
 RWTexture3D<float> map;
-float3 offset, range; //offset of noise sample and it's size
-float offsetFactor; //length of offset vector used to make swirls 
+float3 offset = float3(0,0,0), range = float3(128,128,128); //offset of noise sample and it's size
+float offsetFactor = 1; //length of offset vector used to make swirls 
 
 float Rand(float x)
 {
