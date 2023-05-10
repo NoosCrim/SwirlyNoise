@@ -1,16 +1,13 @@
-// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
 float EaseInOut(float f)
 {
     return (f < 0) ? 0 : ((f < 1) ? (1.0f - cos(f * 3.1415) / 2) : 1);
 }
 
 RWTexture3D<float> map;
-float3 offset, range;
-float offsetFactor;
+float3 offset, range; //offset of noise sample and it's size
+float offsetFactor; //length of offset vector used to make swirls 
 
 float Rand(float x)
 {
