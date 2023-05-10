@@ -1,0 +1,94 @@
+// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+float EaseInOut(float f)
+{
+    return (f < 0) ? 0 : ((f < 1) ? (1.0f - cos(f * 3.1415) / 2) : 1);
+}
+
+RWTexture3D<float> map;
+float3 offset, range;
+float offsetFactor;
+
+float Rand(float x)
+{
+    return frac((sin(x * 2137) + sin(13 + x * 37.27)) * 31415);
+}
+float Rand3To1(float x, float y, float z)
+{
+    return Rand(x * x * (y - z) - 2 * y * y * (y - x) + 16 * z * z * (x - y));
+}
+float2 Rand3To2(float x, float y, float z)
+{
+    return float2(Rand3To1(x + 13, y + 17, z + 23), Rand3To1(x + 31, y + 113, z + 223));
+}
+
+float3 AnglesToUnitVector(float a, float b)
+{
+    return float3(cos(a) * cos(b), sin(a) * cos(b), sin(b));
+}
+
+float ValueNoise3To1(float x, float y, float z, bool cosInterpolation = false)
+{
+    int3 min = int3((int) x, (int) y, (int) z);
+    int3 max = min + int3(1, 1, 1);
+    float   xyz = Rand3To1(min.x, min.y, min.z),
+            Xyz = Rand3To1(max.x, min.y, min.z),
+            xYz = Rand3To1(min.x, max.y, min.z),
+            XYz = Rand3To1(max.x, max.y, min.z),
+            xyZ = Rand3To1(min.x, min.y, max.z),
+            XyZ = Rand3To1(max.x, min.y, max.z),
+            xYZ = Rand3To1(min.x, max.y, max.z),
+            XYZ = Rand3To1(max.x, max.y, max.z);
+    float3 interpolator = float3(x - min.x, y - min.y, z - min.z);
+    if(cosInterpolation)
+        interpolator = float3(EaseInOut(interpolator.x), EaseInOut(interpolator.y), EaseInOut(interpolator.z));
+    float   iyz = xyz * (1.0f - interpolator.x) + Xyz * interpolator.x,
+            iYz = xYz * (1.0f - interpolator.x) + XYz * interpolator.x,
+            iyZ = xyZ * (1.0f - interpolator.x) + XyZ * interpolator.x,
+            iYZ = xYZ * (1.0f - interpolator.x) + XYZ * interpolator.x;
+    float   iz  = iyz * (1.0f - interpolator.y) + iYz * interpolator.y,
+            iZ  = iyZ * (1.0f - interpolator.y) + iYZ * interpolator.y;
+    return iz * (1.0f - interpolator.z) + iZ * interpolator.z;
+}
+float2 ValueNoise3To2(float x, float y, float z, bool cosInterpolation = false)
+{
+    int3 min = int3((int) x, (int) y, (int) z);
+    int3 max = min + int3(1, 1, 1);
+    float2  xyz = Rand3To2(min.x, min.y, min.z),
+            Xyz = Rand3To2(max.x, min.y, min.z),
+            xYz = Rand3To2(min.x, max.y, min.z),
+            XYz = Rand3To2(max.x, max.y, min.z),
+            xyZ = Rand3To2(min.x, min.y, max.z),
+            XyZ = Rand3To2(max.x, min.y, max.z),
+            xYZ = Rand3To2(min.x, max.y, max.z),
+            XYZ = Rand3To2(max.x, max.y, max.z);
+    float3 interpolator = float3(x - min.x, y - min.y, z - min.z);
+    if (cosInterpolation)
+        interpolator = float3(EaseInOut(interpolator.x), EaseInOut(interpolator.y), EaseInOut(interpolator.z));
+    float2  iyz = xyz * (1.0f - interpolator.x) + Xyz * interpolator.x,
+            iYz = xYz * (1.0f - interpolator.x) + XYz * interpolator.x,
+            iyZ = xyZ * (1.0f - interpolator.x) + XyZ * interpolator.x,
+            iYZ = xYZ * (1.0f - interpolator.x) + XYZ * interpolator.x;
+    float2 iz = iyz * (1.0f - interpolator.y) + iYz * interpolator.y,
+            iZ = iyZ * (1.0f - interpolator.y) + iYZ * interpolator.y;
+    return iz * (1.0f - interpolator.z) + iZ * interpolator.z;
+}
+
+float OffsetNoise(float x, float y, float z)
+{
+    float2 angles = ValueNoise3To2(x, y, z);
+    float3 offsetPos = AnglesToUnitVector(angles.x * 3.1415f, angles.y * 3.1415f) * offsetFactor + float3(x, y, z);
+    return ValueNoise3To1(offsetPos.x, offsetPos.y, offsetPos.z);
+}
+[numthreads(8,8,8)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    int3 texSize;
+    map.GetDimensions(texSize.x, texSize.y, texSize.z);
+    float3 step = float3(range.x / texSize.x, range.y / texSize.y, range.z / texSize.z);
+    if (id.x < texSize.x && id.y < texSize.y && id.z < texSize.z)
+        map[id.xyz] = OffsetNoise(id.x * step.x + offset.x, id.y * step.y + offset.y, id.z * step.z + offset.z);
+}
